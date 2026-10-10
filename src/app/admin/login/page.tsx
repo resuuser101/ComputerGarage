@@ -79,20 +79,12 @@ export default function AdminLoginPage() {
 
       setCurrentUser(authData.user);
       
-      // Generate a 6-digit OTP
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      
-      // Save to DB (now using user_otps)
-      await supabase.from("user_otps").insert([
-        { user_id: authData.user.id, code: code }
-      ]);
-
-      // Send Email via our Resend API
+      // Send 2FA request (server securely generates code, stores in DB, and emails user)
       try {
         const res = await fetch("/api/send-2fa", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: authData.user.email, code }),
+          body: JSON.stringify({ email: authData.user.email, userId: authData.user.id }),
         });
         
         if (!res.ok) {

@@ -48,18 +48,24 @@ export default function AdminProductsPage() {
   const handleDelete = async () => {
     if (!productToDelete) return;
 
-    const { error } = await supabase
-      .from("products")
-      .delete()
-      .eq("id", productToDelete.id);
+    try {
+      const res = await fetch(`/api/admin/products/${productToDelete.id}`, {
+        method: "DELETE",
+      });
 
-    if (error) {
-      toast.error("Failed to delete product");
-    } else {
-      toast.success("Product deleted successfully");
-      setProducts(products.filter(p => p.id !== productToDelete.id));
+      const result = await res.json();
+
+      if (!res.ok) {
+        toast.error(result.error || "Failed to delete product");
+      } else {
+        toast.success("Product deleted successfully");
+        setProducts(products.filter(p => p.id !== productToDelete.id));
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete product");
+    } finally {
+      setProductToDelete(null);
     }
-    setProductToDelete(null);
   };
 
   const filteredProducts = products.filter(product => {

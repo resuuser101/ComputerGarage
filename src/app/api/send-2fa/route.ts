@@ -1,13 +1,49 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import nodemailer from "nodemailer";
+import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 
 export async function POST(request: Request) {
   try {
-    const { email, code } = await request.json();
+    const { email, userId, code: incomingCode } = await request.json();
 
-    if (!email || !code) {
-      return NextResponse.json({ error: "Missing email or code" }, { status: 400 });
+    if (!email) {
+      return NextResponse.json({ error: "Missing email" }, { status: 400 });
+    }
+
+    let code = incomingCode;
+
+    // Secure Server-side OTP Generation & Storage
+    if (!code) {
+      if (!userId) {
+        return NextResponse.json({ error: "Missing userId or code" }, { status: 400 });
+      }
+      
+      // Cryptographically secure 6-digit OTP
+      code = crypto.randomInt(100000, 1000000).toString();
+
+      if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        return NextResponse.json({ error: "Missing server credentials" }, { status: 500 });
+      }
+
+      const supabaseAdmin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+
+      // Invalidate existing OTPs for this user
+      await supabaseAdmin.from("user_otps").delete().eq("user_id", userId);
+
+      // Store the new OTP in database
+      const { error: otpError } = await supabaseAdmin.from("user_otps").insert([
+        { user_id: userId, code: code }
+      ]);
+
+      if (otpError) {
+        console.error("Failed to store OTP in database:", otpError);
+        return NextResponse.json({ error: "Failed to create security code" }, { status: 500 });
+      }
     }
 
     const resendApiKey = process.env.RESEND_API_KEY;

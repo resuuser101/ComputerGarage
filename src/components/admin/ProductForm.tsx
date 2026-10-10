@@ -97,29 +97,30 @@ export function ProductForm({ initialData, isEdit = false }: ProductFormProps) {
       ...(!isEdit && { rating: 5.0, reviews: 0 })
     };
 
-    let error;
+    try {
+      const url = isEdit ? `/api/admin/products/${initialData?.id}` : "/api/admin/products";
+      const method = isEdit ? "PATCH" : "POST";
 
-    if (isEdit) {
-      const { error: updateError } = await supabase
-        .from("products")
-        .update(productData)
-        .eq("id", initialData?.id);
-      error = updateError;
-    } else {
-      const { error: insertError } = await supabase
-        .from("products")
-        .insert([productData]);
-      error = insertError;
-    }
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(productData),
+      });
 
-    setIsSaving(false);
+      const result = await res.json();
+      setIsSaving(false);
 
-    if (error) {
-      toast.error(error.message);
-    } else {
+      if (!res.ok) {
+        toast.error(result.error || "Failed to save product");
+        return;
+      }
+
       toast.success(isEdit ? "Product updated successfully!" : "Product created successfully!");
       router.push("/admin/products");
       router.refresh();
+    } catch (err: any) {
+      setIsSaving(false);
+      toast.error(err.message || "An unexpected error occurred");
     }
   };
 

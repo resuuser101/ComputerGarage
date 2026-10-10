@@ -1,12 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { User, Mail, Lock, Phone, Loader2, CheckCircle2, ShieldAlert } from "lucide-react";
+import { User, Mail, Lock, Phone, Key, Loader2, CheckCircle2, ShieldAlert, ShieldCheck, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { createClient } from "@/utils/supabase/client";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function AdminSetupPage() {
   const [firstName, setFirstName] = useState("");
@@ -15,12 +14,32 @@ export default function AdminSetupPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [setupKey, setSetupKey] = useState("");
   
+  const [isCheckingStatus, setIsCheckingStatus] = useState(true);
+  const [isLocked, setIsLocked] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const supabase = createClient();
+  useEffect(() => {
+    async function checkStatus() {
+      try {
+        const res = await fetch("/api/admin/setup");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.isSetupLocked) {
+            setIsLocked(true);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to check admin setup status:", err);
+      } finally {
+        setIsCheckingStatus(false);
+      }
+    }
+    checkStatus();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,33 +52,42 @@ export default function AdminSetupPage() {
     
     setIsLoading(true);
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          role: "admin", // Hardcoded Admin Role
-          first_name: firstName,
-          last_name: lastName,
-          phone: phone,
-          // Dummy data for required address fields
-          street: "Admin HQ",
-          city: "Admin City",
-          state: "Admin State",
-          zip: "0000",
-          country: "Philippines"
-        }
+    try {
+      const res = await fetch("/api/admin/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email,
+          phone,
+          password,
+          setupKey,
+        }),
+      });
+
+      const data = await res.json();
+      setIsLoading(false);
+
+      if (!res.ok) {
+        setError(data.error || "Failed to set up master admin account");
+        return;
       }
-    });
 
-    setIsLoading(false);
-
-    if (error) {
-      setError(error.message);
-    } else {
       setSuccess(true);
+    } catch (err: any) {
+      setIsLoading(false);
+      setError(err.message || "An unexpected error occurred");
     }
   };
+
+  if (isCheckingStatus) {
+    return (
+      <div className="container mx-auto px-4 py-16 flex items-center justify-center min-h-[calc(100vh-200px)]">
+        <Loader2 className="w-8 h-8 animate-spin text-red-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-16 flex items-center justify-center min-h-[calc(100vh-200px)]">
@@ -68,27 +96,54 @@ export default function AdminSetupPage() {
           <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center mx-auto mb-2 text-white">
             <ShieldAlert className="w-6 h-6" />
           </div>
-          <CardTitle className="text-2xl font-bold text-red-900">Admin Setup</CardTitle>
+          <CardTitle className="text-2xl font-bold text-red-900">Master Admin Setup</CardTitle>
           <CardDescription className="text-red-700/80">
-            Create the master administrator account
+            Initial administrator provisioning portal
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          {success ? (
+          {isLocked ? (
+            <div className="py-8 text-center space-y-4">
+              <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <ShieldCheck className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">Setup Locked</h3>
+              <p className="text-slate-600 text-sm max-w-sm mx-auto">
+                The master administrator account is already configured. New administrators must register via an authorized seller invite.
+              </p>
+              <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-center">
+                <Link href="/admin/login">
+                  <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white">
+                    Go to Admin Login
+                  </Button>
+                </Link>
+                <Link href="/admin/register">
+                  <Button variant="outline" className="w-full border-slate-300">
+                    Seller Registration <ArrowRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          ) : success ? (
             <div className="py-8 text-center space-y-4">
               <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold text-slate-900">Admin Created!</h3>
-              <p className="text-slate-500">
-                Please check your email <strong>{email}</strong> to verify the admin account.
+              <h3 className="text-xl font-bold text-slate-900">Master Admin Initialized!</h3>
+              <p className="text-slate-600 text-sm">
+                Master administrator <strong>{email}</strong> has been created.
               </p>
+              <Link href="/admin/login">
+                <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white">
+                  Proceed to Admin Login
+                </Button>
+              </Link>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
                 <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">
-                  <strong>Error:</strong> {error}
+                  <strong>Security Error:</strong> {error}
                 </div>
               )}
               
@@ -124,6 +179,14 @@ export default function AdminSetupPage() {
                   <Input type="tel" placeholder="+63 (917) 000-0000" className="pl-10" required value={phone} onChange={(e) => setPhone(e.target.value)} />
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Setup Secret Key (if configured)</label>
+                <div className="relative">
+                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input type="password" placeholder="Master setup secret" className="pl-10" value={setupKey} onChange={(e) => setSetupKey(e.target.value)} />
+                </div>
+              </div>
             
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Password</label>
@@ -145,10 +208,10 @@ export default function AdminSetupPage() {
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating Admin...
+                    Creating Master Admin...
                   </>
                 ) : (
-                  "Create Admin Account"
+                  "Initialize Master Admin"
                 )}
               </Button>
             </form>
